@@ -1,5 +1,5 @@
 ### 👋 Welcome, Visitor!
-![Welcome Message](https://readme-typing-svg.demolab.com?font=Fira+Code&size=22&pause=1000&color=F75C7E&background=000000&center=true&vCenter=true&width=600&lines=Hello+there!+I'm+Hafize;A+Data+Scientist+with+a+vision;Turning+data+into+actionable+insights;Exploring+Finance+and+Healthcare;Always+learning%2C+always+growing!)
+![Welcome Message](https://readme-typing-svg.demolab.com?font=Fira+Code&size=22&pause=1000&color=F75C7E&background=000000&center=true&vCenter=true&width=600&lines=Hello+there!+I'm+Hafize;eager+to+learn+aspiring+Data+Scientist;Always+learning%2C+always+growing!)
 
 
 ---
