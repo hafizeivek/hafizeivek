@@ -32,7 +32,7 @@ def create_pdf(prediction_label, acc, input_data):
 st.set_page_config(page_title="Yolcu Memnuniyeti Analizi", layout="wide")
 st.title("✈️ Havayolu Yolcu Memnuniyeti Analizi")
 st.markdown(
-    "Yolcu memnuniyeti, havayolu endüstrisi için kritik öneme sahiptir. Bu analizde veri keşfi, hizmet kalitesi değerlendirmesi,tahminleme ve performans yorumlama yapılacaktır.")
+    "Havayolu firmaları, müşteri memnuniyetini artırmak adına çeşitli analizler yapmaktadır. Özellikle uçuş deneyimlerine ilişkin toplanan verilerin analizi, hizmet kalitesinin ölçülmesi ve iyileştirilmesinde önemli rol oynar. Bu çalışmada, bir yolcunun uçuş deneyimi sonrasında memnun olup olmadığını belirleyen faktörler analiz edilmiştir.")
 
 
 # Veriyi Yükleme
