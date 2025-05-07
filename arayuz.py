@@ -34,13 +34,18 @@ st.title("✈️ Havayolu Yolcu Memnuniyeti Analizi")
 st.markdown(
     "Yolcu memnuniyeti, havayolu endüstrisi için kritik öneme sahiptir. Bu analizde veri keşfi, hizmet kalitesi değerlendirmesi,tahminleme ve performans yorumlama yapılacaktır.")
 
+
 # Veriyi Yükleme
 @st.cache_data
 def load_data():
-    df = pd.read_csv("C:/Users/Hafize Nur/Desktop/havayolu/train.csv")
+    url = "https://raw.githubusercontent.com/hafizeivek/hafizeivek/main/train.csv"
+    df = pd.read_csv(url)
+
+    # df = pd.read_csv("train.csv")  ← ❌ bunu kaldır
     df.columns = df.columns.str.strip()
     df.drop(columns=["Unnamed: 0", "id"], inplace=True)
     return df
+
 
 try:
     df = load_data()
@@ -171,16 +176,24 @@ try:
                - Ayrıca, düşük memnuniyet gösteren yolcular için **hizmet geri bildirimleri** toplanarak, onların deneyimlerini iyileştirmek adına somut adımlar atılabilir.
                """)
 
-    # Geçmiş Tahminleri Gösterme
     if 'history' not in st.session_state:
         st.session_state.history = []
 
-    st.session_state.history.append({"datetime": datetime.datetime.now(), "tahmin": prediction_label})
+    # Geçmiş tahminleri kaydet
+    st.session_state.history.append({
+        "prediction": prediction_label,
+        "accuracy": round(acc * 100, 2),
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
 
-    st.subheader("📜 Geçmiş Tahminler")
-    st.table(pd.DataFrame(st.session_state.history))
+    # Geçmiş tahminleri gösterme
+    st.subheader("Geçmiş Tahminler")
+    if st.session_state.history:
+        history_df = pd.DataFrame(st.session_state.history)
+        st.dataframe(history_df)
+    else:
+        st.info("Henüz bir tahmin yapılmadı.")
+
 
 except Exception as e:
     st.error(f"❌ Hata oluştu: {str(e)}")
-
-
