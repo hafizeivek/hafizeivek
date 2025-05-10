@@ -38,7 +38,7 @@ def create_pdf(prediction_label, acc, input_data, classification_rep):
 # Sayfa ayarı
 st.set_page_config(page_title="Yolcu Memnuniyeti Analizi", layout="wide")
 st.title("✈️ Havayolu Yolcu Memnuniyeti Analizi")
-st.markdown("Havayolu firmaları, müşteri memnuniyetini artırmak adına çeşitli analizler yapmaktadır...")
+st.markdown("Havayolu firmaları, müşteri memnuniyetini artırmak adına çeşitli analizler yapmaktadır. Özellikle uçuş deneyimlerine ilişkin toplanan verilerin analizi, hizmet kalitesinin ölçülmesi ve iyileştirilmesinde önemli rol oynar. Bu çalışmada, bir yolcunun uçuş deneyimi sonrasında memnun olup olmadığını belirleyen faktörler analiz edilmiştir.")
 
 # Veri yükleme
 @st.cache_data
