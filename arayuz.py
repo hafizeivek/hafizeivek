@@ -3,13 +3,15 @@ import pandas as pd
 import plotly.express as px
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, classification_report
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from io import BytesIO
 import datetime
+from sklearn.preprocessing import LabelEncoder
 
-def create_pdf(prediction_label, acc, input_data):
+
+def create_pdf(prediction_label, acc, input_data, classification_rep):
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     textobject = c.beginText(40, 800)
@@ -17,7 +19,10 @@ def create_pdf(prediction_label, acc, input_data):
     textobject.textLine("Yolcu Memnuniyeti Tahmin Raporu")
     textobject.textLine("----------------------------------")
     textobject.textLine(f"Tahmin Edilen Memnuniyet Seviyesi: {prediction_label}")
-    textobject.textLine(f"Model Doğruluğu (Accuracy): %{round(acc*100, 2)}")
+    textobject.textLine(f"Model Doğruluğu (Accuracy): %{round(acc * 100, 2)}")
+    textobject.textLine("")
+    textobject.textLine("Sınıf Bazlı Doğruluk Raporu:")
+    textobject.textLine(classification_rep)
     textobject.textLine("")
     textobject.textLine("Kullanıcı Girdi Değerleri:")
     for key, value in input_data.items():
@@ -27,6 +32,7 @@ def create_pdf(prediction_label, acc, input_data):
     c.save()
     buffer.seek(0)
     return buffer
+
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="Yolcu Memnuniyeti Analizi", layout="wide")
@@ -41,12 +47,9 @@ def load_data():
     url = "https://raw.githubusercontent.com/hafizeivek/hafizeivek/main/train.csv"
     df = pd.read_csv(url)
 
-    # df = pd.read_csv("train.csv")  ← ❌ bunu kaldır
     df.columns = df.columns.str.strip()
     df.drop(columns=["Unnamed: 0", "id"], inplace=True)
     return df
-
-
 try:
     df = load_data()
     st.success("✅ Veri başarıyla yüklendi.")
@@ -72,7 +75,7 @@ try:
         (df["Type of Travel"].isin(travel_type)) &
         (df["Class"].isin(class_type)) &
         (df["Customer Type"].isin(customer_type))
-    ]
+        ]
 
     # --- Temel Göstergeler ---
     st.subheader("📈 Temel Göstergeler")
@@ -98,7 +101,7 @@ try:
     else:
         st.warning("Grafik oluşturmak için yeterli memnuniyet kategorisi yok. Lütfen filtreleri değiştirin.")
 
-        # Cinsiyete Göre Memnuniyet
+    # Cinsiyete Göre Memnuniyet
     st.subheader("👥 Cinsiyete Göre Memnuniyet Oranı")
     gender_satisfaction = filtered_df.groupby(['Gender', 'satisfaction']).size().reset_index(name='count')
     fig2 = px.pie(gender_satisfaction[gender_satisfaction['Gender'] == gender],
@@ -109,39 +112,104 @@ try:
     # --- Tahmin Girişi ---
     st.subheader("🔮 Yolcu Memnuniyeti Tahmini")
     input_data = {}
+    # input_data kategorik değişkenlerle birlikte güncellenmeli
+    input_data['Gender'] = gender
+    input_data['Customer Type'] = customer_type[0] if isinstance(customer_type, list) else customer_type
+    input_data['Type of Travel'] = travel_type[0] if isinstance(travel_type, list) else travel_type
+    input_data['Class'] = class_type[0] if isinstance(class_type, list) else class_type
     input_features = ['Age', 'Flight Distance', 'Inflight wifi service', 'Food and drink',
                       'Seat comfort', 'Inflight entertainment', 'Online boarding', 'On-board service',
                       'Leg room service', 'Baggage handling']
 
+    # Kullanıcının giriş yapacağı özellikler
+    input_features = ['Age', 'Flight Distance', 'Inflight wifi service', 'Food and drink',
+                      'Seat comfort', 'Inflight entertainment', 'Online boarding', 'On-board service',
+                      'Leg room service', 'Baggage handling']
     for feature in input_features:
-        input_data[feature] = st.slider(feature, int(df[feature].min()), int(df[feature].max()),
-                                        int(df[feature].mean()))
+        # Önce bu sütunun veri tipi gerçekten sayısal mı kontrol et
+        if pd.api.types.is_numeric_dtype(df[feature]):
+            min_val = int(df[feature].min())
+            max_val = int(df[feature].max())
+            mean_val = int(df[feature].mean())
+            input_data[feature] = st.slider(feature, min_val, max_val, mean_val)
+        else:
+            st.warning(f"{feature} sayısal değil, slider eklenmedi.")
 
-    # --- Model Eğitimi ---
+    # Kategorik değişkenleri encode etme (label encoding)
+    le = LabelEncoder()
+    for col in ['Gender', 'Customer Type', 'Type of Travel', 'Class']:
+        df[col] = le.fit_transform(df[col])
+    label_encoders = {}
+    for col in ['Gender', 'Customer Type', 'Type of Travel', 'Class']:
+        le = LabelEncoder()
+        df[col] = le.fit_transform(df[col])
+        label_encoders[col] = le
+        # Encode input_data kategorik değerleri
+        for col in ['Gender', 'Customer Type', 'Type of Travel', 'Class']:
+            input_data[col] = label_encoders[col].transform([input_data[col]])[0]
+
+    # Eğitim ve test verisi hazırlığı
     model_df = df.copy()
     model_df.dropna(inplace=True)
-    model_df = pd.get_dummies(model_df, columns=["Gender", "Customer Type", "Type of Travel", "Class"], drop_first=True)
-    model_df["satisfaction"] = model_df["satisfaction"].map(
-        {"dissatisfied": 0, "neutral or dissatisfied": 1, "satisfied": 2})
 
-    # Ortak Özellikler (input_data ve model aynı olmalı)
-    model_features = input_features  # Sadece numerik olanlar
+    # Özellik ve hedef değişkenleri belirle
+    model_features = input_features + ['Gender', 'Customer Type', 'Type of Travel', 'Class']
     X = model_df[model_features]
-    y = model_df["satisfaction"]
+    # Y hedef değişkenini sayısal hale getir
+    y = model_df["satisfaction"].map({"dissatisfied": 0, "satisfied": 2})
+    # Gender sütununu 0 ve 1 olarak kodlayalım
+    df['Gender'] = df['Gender'].map({'Male': 1, 'Female': 0})
+
+    # Eksik değerleri olan satırları temizle
+    X = model_df[model_features]
+    valid_idx = y.notna()  # Yani y'nin NaN olmayan indekslerini al
+    X = X[valid_idx]
+    y = y[valid_idx]
+
+    # Eğitim ve test verisi böl
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Model oluştur ve eğit
+    model = RandomForestClassifier(n_estimators=200, max_depth=10, random_state=42)
+    model.fit(X_train, y_train)
+
+    # Encode input_data (kategorikleri sayısala çevirme)
+    encoded_input = {}
+    for col in ['Gender', 'Customer Type', 'Type of Travel', 'Class']:
+        encoded_input[col] = label_encoders[col].transform([input_data[col]])[0]
+    for col in input_features:
+        encoded_input[col] = input_data[col]
+
+    # Veriyi hazırlama
+    X = df.drop("satisfaction", axis=1)
+    y = df["satisfaction"]
+    y = LabelEncoder().fit_transform(y)
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     model = RandomForestClassifier()
     model.fit(X_train, y_train)
-    prediction = model.predict(pd.DataFrame([input_data]))[0]
-    acc = accuracy_score(y_test, model.predict(X_test))
 
-    # --- Tahmin Sonucu ---
-    satisfaction_level = {0: "🔴 Düşük Memnuniyet", 1: "🟡 Orta Memnuniyet", 2: "🔵 Yüksek Memnuniyet"}
+    prediction = model.predict([list(encoded_input.values())])[0]
+    acc = accuracy_score(y_test, model.predict(X_test))
+    class_rep = classification_report(y_test, model.predict(X_test), output_dict=False)
+
+    # Sonuç gösterme
+    prediction_label = "Memnun" if prediction == 1 else "Memnun Değil"
+    st.success(f"Tahmin: {prediction_label} (Doğruluk: %{round(acc * 100, 2)})")
+
+    # PDF oluşturma
+    if st.button("📄 Tahmin Raporunu PDF Olarak İndir"):
+        pdf_buffer = create_pdf(prediction_label, acc, input_data, class_rep)
+        st.download_button(label="PDF'yi İndir", data=pdf_buffer, file_name="tahmin_raporu.pdf")
+
+    # Tahmin Sonucu Göster
+    satisfaction_level = {0: "🔴 Düşük Memnuniyet", 2: "🔵 Yüksek Memnuniyet"}
     prediction_label = satisfaction_level.get(prediction, "Bilinmeyen")
     st.success(f"📌 Tahmin: {prediction_label}")
 
-    # --- PDF İndirme Butonu ---
-    pdf_file = create_pdf(prediction_label, acc, input_data)
+    # PDF Rapor Oluşturma
+    classification_rep = classification_report(y_test, model.predict(X_test))
+    pdf_file = create_pdf(prediction_label, acc, input_data, classification_rep)
     st.download_button(
         label="📥 PDF Raporu İndir",
         data=pdf_file,
@@ -149,51 +217,21 @@ try:
         mime="application/pdf"
     )
 
-    # Dinamik Stratejik Yorumlar
+    # Stratejik Yorumlar (Sadece Düşük ve Yüksek)
     if prediction == 2:
         st.subheader("🔵 Yüksek Memnuniyet - Stratejik Yorumlar")
         st.markdown("""
-               - **Yüksek memnuniyet**, yolcuların uçuş deneyimlerinden oldukça memnun olduklarını gösteriyor. 
-               - Bu seviyenin sürdürülmesi için yolculara sağlanan hizmet kalitesinin sürekli yüksek tutulması gerekir.
-               - **Yemek ve içecek servisleri**, **koltuk konforu** ve **eğlence seçenekleri** gibi faktörler yüksek memnuniyetin anahtarıdır. 
-               - Uçuş deneyimini daha da iyileştirmek için bu alanlarda sürekli yenilikler yapılabilir.
-               - Bu yüksek memnuniyet seviyesinin devamı için **sadık müşteri programları** ve **özelleştirilmiş hizmetler** önerilebilir.
-               """)
-    elif prediction == 1:
-        st.subheader("🟡 Orta Memnuniyet - Stratejik Yorumlar")
-        st.markdown("""
-               - **Orta memnuniyet** seviyesi, yolcuların uçuş deneyimlerinden genel olarak memnun olduklarını, ancak bazı iyileştirmelere açık olduklarını gösteriyor. 
-               - Yolcuların memnuniyet seviyelerini artırmak için, özellikle **yemek ve içecek servisleri** ve **eğlence hizmetleri** gibi alanlarda iyileştirmeler yapılabilir.
-               - Koltuk rahatlığı ve uçuş öncesi hizmetler de gözden geçirilmeli. 
-               - Orta memnuniyet seviyesinde olan yolculara yönelik özel teklifler ve iyileştirilmiş deneyimler sunmak, memnuniyeti artırabilir.
-               """)
+            - **Yüksek memnuniyet**, yolcuların uçuş deneyimlerinden oldukça memnun olduklarını gösteriyor. 
+            - Bu seviyenin sürdürülmesi için hizmet kalitesi sürekli yüksek tutulmalı.
+            - **Yemek**, **konfor**, ve **eğlence** faktörlerine odaklanarak sadakat artırılabilir.
+        """)
     elif prediction == 0:
         st.subheader("🔴 Düşük Memnuniyet - Stratejik Yorumlar")
         st.markdown("""
-               - **Düşük memnuniyet** seviyesi, yolcuların uçuş deneyimlerinden olumsuz yönde etkilendiklerini gösteriyor. 
-               - Bu seviyedeki yolcuların memnuniyetini artırmak için, özellikle **yemek ve içecek servisi**, **koltuk konforu**, ve **internet erişimi** gibi alanlarda ciddi iyileştirmelere gidilmesi gerekebilir.
-               - Koltuk konforu ve hizmet kalitesi gibi unsurlar üzerinde yapılacak iyileştirmeler, yolcu memnuniyetini hızlıca artırabilir.
-               - Ayrıca, düşük memnuniyet gösteren yolcular için **hizmet geri bildirimleri** toplanarak, onların deneyimlerini iyileştirmek adına somut adımlar atılabilir.
-               """)
-
-    if 'history' not in st.session_state:
-        st.session_state.history = []
-
-    # Geçmiş tahminleri kaydet
-    st.session_state.history.append({
-        "prediction": prediction_label,
-        "accuracy": round(acc * 100, 2),
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    })
-
-    # Geçmiş tahminleri gösterme
-    st.subheader("Geçmiş Tahminler")
-    if st.session_state.history:
-        history_df = pd.DataFrame(st.session_state.history)
-        st.dataframe(history_df)
-    else:
-        st.info("Henüz bir tahmin yapılmadı.")
-
+            - **Düşük memnuniyet**, yolcuların deneyimlerinde önemli eksiklikler olduğunu gösteriyor.
+            - **Hizmet kalitesinin** artırılması, yolcuların uçuş deneyimlerini iyileştirebilir.
+            - Özellikle **online biniş**, **baggage handling** ve **yemek servisi** iyileştirilebilir.
+        """)
 
 except Exception as e:
-    st.error(f"❌ Hata oluştu: {str(e)}")
+    st.error(f"🛑 Veri Yüklenemedi veya Bir Hata Oluştu: {e}")
