@@ -11,6 +11,7 @@ from io import BytesIO
 import datetime
 
 
+
 # PDF oluşturma fonksiyonu
 def create_pdf(prediction_label, acc, input_data, classification_rep):
     buffer = BytesIO()
@@ -38,7 +39,7 @@ def create_pdf(prediction_label, acc, input_data, classification_rep):
 
 # Sayfa ayarı
 st.set_page_config(page_title="Yolcu Memnuniyeti Analizi", layout="wide")
-st.title("✈️ Havayolu Yolcu Memnuniyeti Analizi")
+st.title("✈ Havayolu Yolcu Memnuniyeti Analizi")
 st.markdown(
     "Havayolu firmaları, müşteri memnuniyetini artırmak adına çeşitli analizler yapmaktadır. Özellikle uçuş deneyimlerine ilişkin toplanan verilerin analizi, hizmet kalitesinin ölçülmesi ve iyileştirilmesinde önemli rol oynar. Bu çalışmada, bir yolcunun uçuş deneyimi sonrasında memnun olup olmadığını belirleyen faktörler analiz edilmiştir.")
 
@@ -59,6 +60,34 @@ try:
 
     with st.expander("📄 Veri Kümesine Genel Bakış"):
         st.dataframe(df.head())
+
+        # Veri setinin dağılımını daha detaylı göster
+        st.subheader("Memnuniyet Dağılımı")
+        satisfaction_counts = df["satisfaction"].value_counts()
+        satisfied_count = satisfaction_counts.get('satisfied', 0)
+        dissatisfied_count = satisfaction_counts.get('neutral or dissatisfied', 0)
+        total_count = satisfied_count + dissatisfied_count
+
+        # Sayısal değerleri göster
+        st.write(
+            f"Memnun Olmayan Yolcu Sayısı: {dissatisfied_count} ({round(dissatisfied_count / total_count * 100, 2)}%)")
+        st.write(f"Memnun Yolcu Sayısı: {satisfied_count} ({round(satisfied_count / total_count * 100, 2)}%)")
+        st.write(f"Toplam Yolcu Sayısı: {total_count}")
+
+        # Yatay bar chart ekle
+        satisfaction_df = pd.DataFrame({
+            'Memnuniyet': ['Memnun', 'Memnun Değil'],
+            'Sayı': [satisfied_count, dissatisfied_count],
+            'Yüzde': [round(satisfied_count / total_count * 100, 2), round(dissatisfied_count / total_count * 100, 2)]
+        })
+
+        fig_bar = px.bar(satisfaction_df, x='Sayı', y='Memnuniyet', text='Yüzde',
+                         color='Memnuniyet', orientation='h',
+                         labels={'Sayı': 'Yolcu Sayısı', 'Memnuniyet': 'Memnuniyet Durumu'},
+                         title='Memnuniyet Dağılımı',
+                         text_auto='.2f%')
+        fig_bar.update_traces(texttemplate='%{text}%', textposition='outside')
+        st.plotly_chart(fig_bar, use_container_width=True)
 
     # Varsayılan filtre değerlerini tanımlıyoruz
     default_gender = df["Gender"].unique()[0]  # İlk cinsiyet seçeneği
@@ -162,32 +191,134 @@ try:
 
     # --- Göstergeler ---
     st.subheader("📈 Temel Göstergeler")
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("Toplam Yolcu (filtreli)", len(filtered_df))
-    col2.metric("Toplam Yolcu (genel)", len(df))
-    col3.metric("Memnun Yolcu Oranı",
-                f"%{round(filtered_df['satisfaction'].value_counts(normalize=True).get('satisfied', 0) * 100, 2)}")
-    col4.metric("Ortalama Uçuş Mesafesi", round(filtered_df["Flight Distance"].mean(), 2))
-    col5.metric("Ortalama Çevrimiçi Biniş", round(filtered_df["Online boarding"].mean(), 2))
 
-    # --- Grafikler ---
+    # Memnuniyet durumlarını hesapla
+    satisfied_ratio = filtered_df['satisfaction'].value_counts(normalize=True).get('satisfied', 0)
+    dissatisfied_ratio = filtered_df['satisfaction'].value_counts(normalize=True).get('neutral or dissatisfied', 0)
+
+    # Metrik göstergeleri iyileştir
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("Toplam Yolcu (filtreli)", f"{len(filtered_df):,}")
+    col2.metric("Toplam Yolcu (genel)", f"{len(df):,}")
+
+    # Her iki memnuniyet oranı da gösteriliyor
+    col3.metric("Memnun Yolcu Oranı", f"%{round(satisfied_ratio * 100, 2)}")
+    col4.metric("Memnun Olmayan Yolcu Oranı", f"%{round(dissatisfied_ratio * 100, 2)}")
+
+    col5.metric("Ortalama Uçuş Mesafesi", f"{round(filtered_df['Flight Distance'].mean(), 2)} km")
+
+    # --- Memnuniyet Dağılımı Grafiği (Geliştirilmiş) ---
     st.subheader("🧭 Memnuniyet Dağılımı")
-    fig1 = px.histogram(filtered_df, x="satisfaction", color="satisfaction", title="Memnuniyet Dağılımı")
+
+    # Count değerlerini hesapla
+    filtered_satisfaction_counts = filtered_df["satisfaction"].value_counts().reset_index()
+    filtered_satisfaction_counts.columns = ['Memnuniyet Durumu', 'Sayı']
+
+    # Memnuniyet durumlarını Türkçeleştir
+    filtered_satisfaction_counts['Memnuniyet'] = filtered_satisfaction_counts['Memnuniyet Durumu'].map({
+        'satisfied': 'Memnun',
+        'neutral or dissatisfied': 'Memnun Değil'
+    })
+
+    # Yüzde değerlerini ekle
+    total = filtered_satisfaction_counts['Sayı'].sum()
+    filtered_satisfaction_counts['Yüzde'] = (filtered_satisfaction_counts['Sayı'] / total * 100).round(2)
+
+    # Donut chart ile göster
+    fig1 = px.pie(filtered_satisfaction_counts,
+                  values='Sayı',
+                  names='Memnuniyet',
+                  title=f"Filtrelenen Verideki Memnuniyet Dağılımı (Toplam: {total} Yolcu)",
+                  color='Memnuniyet',
+                  color_discrete_map={'Memnun': '#2E86C1', 'Memnun Değil': '#E74C3C'},
+                  hole=0.4)
+
+    # Yüzdeleri daha belirgin göster
+    fig1.update_traces(textposition='inside', textinfo='percent+label')
+
+    # Açıklamaları ekle
+    annotations = []
+    for i, row in filtered_satisfaction_counts.iterrows():
+        annotations.append(dict(
+            text=f"{row['Sayı']:,} kişi<br>({row['Yüzde']}%)",
+            x=0.5, y=0.5,
+            font_size=12,
+            showarrow=False
+        ))
+
     st.plotly_chart(fig1, use_container_width=True)
+
+    # Sayısal detayları tablo halinde göster
+    st.markdown("#### Sayısal Dağılım")
+    st.dataframe(filtered_satisfaction_counts[['Memnuniyet', 'Sayı', 'Yüzde']], use_container_width=True)
 
     # Cinsiyete Göre Memnuniyet
     st.subheader("👥 Cinsiyete Göre Memnuniyet Oranı")
     gender_satisfaction = filtered_df.groupby(['Gender', 'satisfaction']).size().reset_index(name='count')
-    fig2 = px.pie(gender_satisfaction[gender_satisfaction['Gender'] == gender],
-                  names='satisfaction', values='count',
-                  title=f"{gender} Yolcularının Memnuniyet Dağılımı")
-    st.plotly_chart(fig2, use_container_width=True)
+
+    if not gender_satisfaction.empty and gender in gender_satisfaction['Gender'].values:
+        # Türkçe memnuniyet isimlerini ekle
+        gender_satisfaction['Memnuniyet'] = gender_satisfaction['satisfaction'].map({
+            'satisfied': 'Memnun',
+            'neutral or dissatisfied': 'Memnun Değil'
+        })
+
+        # Seçilen cinsiyete göre filtrele
+        gender_data = gender_satisfaction[gender_satisfaction['Gender'] == gender]
+
+        # Pie chart güncellendi
+        fig2 = px.pie(gender_data,
+                      names='Memnuniyet',
+                      values='count',
+                      title=f"{gender} Yolcularının Memnuniyet Dağılımı",
+                      color='Memnuniyet',
+                      color_discrete_map={'Memnun': '#2E86C1', 'Memnun Değil': '#E74C3C'})
+
+        # Pasta grafiği geliştir
+        fig2.update_traces(textposition='inside', textinfo='percent+label')
+
+        st.plotly_chart(fig2, use_container_width=True)
 
     st.subheader("📊 Hizmet Kalitesine Göre Ortalamalar")
     service_cols = ['Inflight wifi service', 'Food and drink', 'Seat comfort', 'On-board service']
+
     if filtered_df["satisfaction"].nunique() > 1:
-        means = filtered_df.groupby("satisfaction")[service_cols].mean().T
-        st.dataframe(means.style.highlight_max(axis=1))
+        # Memnuniyet durumuna göre gruplandırma
+        means_by_satisfaction = filtered_df.groupby("satisfaction")[service_cols].mean().T
+
+        # Türkçe sütun isimleri ile yeni DataFrame oluştur
+        means_df = means_by_satisfaction.copy()
+        means_df.columns = ['Memnun Değil',
+                            'Memnun'] if 'neutral or dissatisfied' in means_by_satisfaction.columns else means_df.columns
+
+        # Farkı hesapla
+        if means_df.shape[1] == 2:
+            means_df['Fark'] = means_df['Memnun'] - means_df['Memnun Değil']
+
+        # Tablo formatında göster
+        st.dataframe(means_df.style.highlight_max(axis=1).format("{:.2f}"), use_container_width=True)
+
+        # Hizmet puanlarını görselleştir
+        st.markdown("#### Memnuniyete Göre Hizmet Puanları Karşılaştırması")
+        service_data = means_df.reset_index()
+        service_data.columns.name = None
+        service_data = service_data.rename(columns={'index': 'Hizmet'})
+
+        # Bar chart için hazırla
+        melted_service = pd.melt(service_data, id_vars=['Hizmet'],
+                                 value_vars=['Memnun', 'Memnun Değil'],
+                                 var_name='Memnuniyet', value_name='Ortalama Puan')
+
+        # Bar chart oluştur
+        fig_service = px.bar(melted_service,
+                             x='Hizmet',
+                             y='Ortalama Puan',
+                             color='Memnuniyet',
+                             barmode='group',
+                             title='Memnuniyet Durumuna Göre Hizmet Puanları',
+                             color_discrete_map={'Memnun': '#2E86C1', 'Memnun Değil': '#E74C3C'})
+
+        st.plotly_chart(fig_service, use_container_width=True)
     else:
         st.warning("Grafik için yeterli kategori yok.")
 
@@ -267,8 +398,38 @@ try:
     X = df.drop("satisfaction", axis=1)
     y = df["satisfaction"]
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
+
+    # ÖNEMLİ: Model parametrelerini iyileştirme
+    model = RandomForestClassifier(n_estimators=100, random_state=42,
+                                   min_samples_leaf=5,  # Overfitting'i azaltmak için
+                                   max_depth=10,  # Daha dengeli tahminler için derinliği sınırla
+                                   class_weight='balanced')  # Sınıf dengesizliğini gidermek için
     model.fit(X_train, y_train)
+
+    # Model doğruluğunu test et ve bilgi ver
+    y_pred_test = model.predict(X_test)
+    test_accuracy = accuracy_score(y_test, y_pred_test)
+
+    # Özellik önemlerini hesapla ve göster
+    with st.expander("📊 Özellik Önem Sıralaması"):
+        feature_importance = pd.DataFrame({
+            'Özellik': X.columns,
+            'Önem': model.feature_importances_
+        }).sort_values('Önem', ascending=False)
+
+        # Özellik önemleri için bar grafiği ekle
+        fig_importance = px.bar(feature_importance.head(10),
+                                x='Önem',
+                                y='Özellik',
+                                orientation='h',
+                                title='En Önemli 10 Özellik')
+        st.plotly_chart(fig_importance, use_container_width=True)
+
+        # Tam tabloyu göster
+        st.dataframe(feature_importance)
+
+        # En önemli özellikleri vurgula
+        st.info(f"En önemli 5 özellik: {', '.join(feature_importance['Özellik'].head(5).tolist())}")
 
     # Tahmin butonu
     if st.button("🧠 Tahmini Hesapla"):
@@ -290,13 +451,21 @@ try:
         # DataFrame'e çevir
         input_df = pd.DataFrame([input_list], columns=feature_order)
 
-        # Model tahmini
+        # Model tahmini - Olasılıkları da hesapla
         prediction = model.predict(input_df)[0]
+        prediction_proba = model.predict_proba(input_df)[0]
+
+        # Tahmini doğrudan değil, olasılık eşiğine göre belirle
+        # Özellikle düşük değerlerdeki parametreler için tahmini 'memnun değil' olma yönünde güçlendir
+        # Eğer memnuniyet olasılığı %60'dan azsa, "memnun değil" olarak tahmin et
+        if prediction_proba[1] < 0.6:  # Eşik değeri: olasılığın %60'ından azı "memnun değil" olarak belirle
+            prediction = 0  # Memnun değil
 
         # Tahmin yapıldı olarak işaretle
         st.session_state.prediction_made = True
         st.session_state.prediction = prediction
         st.session_state.input_data = input_data.copy()
+        st.session_state.prediction_proba = prediction_proba.tolist()  # Olasılıkları da kaydet
 
         # Sayfayı yenile
         st.rerun()
@@ -305,15 +474,34 @@ try:
     if st.session_state.prediction_made:
         prediction = st.session_state.prediction
         input_data = st.session_state.input_data
+        prediction_proba = st.session_state.prediction_proba if 'prediction_proba' in st.session_state else [0.5, 0.5]
 
         acc = accuracy_score(y_test, model.predict(X_test))
         class_rep = classification_report(y_test, model.predict(X_test))
 
         prediction_label = "🔵 Memnun" if prediction == 1 else "🔴 Memnun Değil"
 
-        st.markdown(f"### 🔍 Tahmin Sonucu: **{prediction_label}**")
+        # Tahmin sonucunu daha dikkat çekici hale getir
+        st.markdown(f"""
+        <div style="padding: 20px; border-radius: 10px; background-color: {'#D4EFDF' if prediction == 1 else '#FADBD8'};">
+            <h3 style="text-align: center; color: {'#145A32' if prediction == 1 else '#7B241C'};">
+                🔍 Tahmin Sonucu: {prediction_label}
+            </h3>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Dinamik Stratejik Yorumlar
+        # Olasılıkları görsel olarak göster - Geliştirilmiş
+        st.markdown("#### Tahmin Olasılıkları")
+
+        # Olasılık değerlerini DataFrame'e çevir
+        probs_df = pd.DataFrame({
+            'Memnuniyet': ['Memnun Değil', 'Memnun'],
+            'Olasılık': [prediction_proba[0], prediction_proba[1]],
+            'Yüzde': [f"%{round(prediction_proba[0] * 100, 2)}", f"%{round(prediction_proba[1] * 100, 2)}"]
+        })
+
+
+     # Dinamik Stratejik Yorumlar
         if prediction == 1:
             st.subheader("Stratejik Yorumlar")
             st.markdown(""" 
