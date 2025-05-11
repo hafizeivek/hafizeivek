@@ -35,10 +35,13 @@ def create_pdf(prediction_label, acc, input_data, classification_rep):
     buffer.seek(0)
     return buffer
 
+
 # Sayfa ayarı
 st.set_page_config(page_title="Yolcu Memnuniyeti Analizi", layout="wide")
 st.title("✈️ Havayolu Yolcu Memnuniyeti Analizi")
-st.markdown("Havayolu firmaları, müşteri memnuniyetini artırmak adına çeşitli analizler yapmaktadır. Özellikle uçuş deneyimlerine ilişkin toplanan verilerin analizi, hizmet kalitesinin ölçülmesi ve iyileştirilmesinde önemli rol oynar. Bu çalışmada, bir yolcunun uçuş deneyimi sonrasında memnun olup olmadığını belirleyen faktörler analiz edilmiştir.")
+st.markdown(
+    "Havayolu firmaları, müşteri memnuniyetini artırmak adına çeşitli analizler yapmaktadır. Özellikle uçuş deneyimlerine ilişkin toplanan verilerin analizi, hizmet kalitesinin ölçülmesi ve iyileştirilmesinde önemli rol oynar. Bu çalışmada, bir yolcunun uçuş deneyimi sonrasında memnun olup olmadığını belirleyen faktörler analiz edilmiştir.")
+
 
 # Veri yükleme
 @st.cache_data
@@ -48,6 +51,7 @@ def load_data():
     df.columns = df.columns.str.strip()
     df.drop(columns=["Unnamed: 0", "id"], inplace=True)
     return df
+
 
 try:
     df = load_data()
@@ -66,33 +70,94 @@ try:
     with st.sidebar:
         st.header("🔍 Filtreleme Seçenekleri")
 
-        # Filtreleme seçeneklerini kaydediyoruz, `session_state` üzerinden
+        # Filtreleri temizle butonu - sidebar'ın en üstüne taşındı
+        if st.button("🧹 Filtreleri Temizle"):
+            # Session state değişkenlerini varsayılan değerlere sıfırla
+            st.session_state.gender = default_gender
+            # Tüm checkbox'ları seçili hale getir
+            st.session_state.travel_type_selected = {option: True for option in default_travel_type}
+            st.session_state.class_type_selected = {option: True for option in default_class_type}
+            st.session_state.customer_type_selected = {option: True for option in default_customer_type}
+            # Tahmin durumunu sıfırla
+            st.session_state.prediction_made = False
+            st.session_state.reset_filters = True  # Filtre sıfırlama işlemini işaretle
+            st.rerun()  # Sayfayı yenile
+
+        # Filtreleme seçeneklerini session_state ile başlat
         if "gender" not in st.session_state:
             st.session_state.gender = default_gender
-        if "travel_type" not in st.session_state:
-            st.session_state.travel_type = default_travel_type
-        if "class_type" not in st.session_state:
-            st.session_state.class_type = default_class_type
-        if "customer_type" not in st.session_state:
-            st.session_state.customer_type = default_customer_type
+        if "travel_type_selected" not in st.session_state:
+            st.session_state.travel_type_selected = {option: True for option in default_travel_type}
+        if "class_type_selected" not in st.session_state:
+            st.session_state.class_type_selected = {option: True for option in default_class_type}
+        if "customer_type_selected" not in st.session_state:
+            st.session_state.customer_type_selected = {option: True for option in default_customer_type}
+        if "prediction_made" not in st.session_state:
+            st.session_state.prediction_made = False
+        if "reset_filters" not in st.session_state:
+            st.session_state.reset_filters = False
 
-        # Filtreleme seçenekleri
+        # Cinsiyet seçimi (selectbox olarak kalıyor)
         gender = st.selectbox("Cinsiyet Seçiniz", df["Gender"].unique(),
                               index=df["Gender"].unique().tolist().index(st.session_state.gender))
-        travel_type = st.multiselect("Yolculuk Türü", df["Type of Travel"].unique(),
-                                     default=st.session_state.travel_type)
-        class_type = st.multiselect("Sınıf", df["Class"].unique(), default=st.session_state.class_type)
-        customer_type = st.multiselect("Müşteri Türü", df["Customer Type"].unique(),
-                                       default=st.session_state.customer_type)
 
+        # Yolculuk Türü için checkbox'lar
+        st.subheader("Yolculuk Türü")
+        travel_type = []
+        for option in default_travel_type:
+            # st.session_state değeri kullanarak checkbox'ları kontrol et
+            selected = st.checkbox(option, value=st.session_state.travel_type_selected.get(option, True),
+                                   key=f"travel_{option}")
+            if selected:
+                travel_type.append(option)
+            # Checkbox durumunu güncelle
+            st.session_state.travel_type_selected[option] = selected
 
+        # Sınıf için checkbox'lar
+        st.subheader("Sınıf")
+        class_type = []
+        for option in default_class_type:
+            # st.session_state değeri kullanarak checkbox'ları kontrol et
+            selected = st.checkbox(option, value=st.session_state.class_type_selected.get(option, True),
+                                   key=f"class_{option}")
+            if selected:
+                class_type.append(option)
+            # Checkbox durumunu güncelle
+            st.session_state.class_type_selected[option] = selected
 
-   # Filtreleri uygula
+        # Müşteri Türü için checkbox'lar
+        st.subheader("Müşteri Türü")
+        customer_type = []
+        for option in default_customer_type:
+            # st.session_state değeri kullanarak checkbox'ları kontrol et
+            selected = st.checkbox(option, value=st.session_state.customer_type_selected.get(option, True),
+                                   key=f"customer_{option}")
+            if selected:
+                customer_type.append(option)
+            # Checkbox durumunu güncelle
+            st.session_state.customer_type_selected[option] = selected
+
+        # Filtre sıfırlama işlemi tamamlandıysa bayrağı sıfırla
+        if st.session_state.reset_filters:
+            st.session_state.reset_filters = False
+
+        # Session_state değerlerini güncelle
+        st.session_state.gender = gender
+        st.session_state.travel_type = travel_type if travel_type else default_travel_type
+        st.session_state.class_type = class_type if class_type else default_class_type
+        st.session_state.customer_type = customer_type if customer_type else default_customer_type
+
+    # Filtreleri uygula - En az bir filtre seçili olmalı
+    # Boş liste ise varsayılan tüm değerleri kullan
+    travel_type_filter = st.session_state.travel_type if st.session_state.travel_type else default_travel_type
+    class_type_filter = st.session_state.class_type if st.session_state.class_type else default_class_type
+    customer_type_filter = st.session_state.customer_type if st.session_state.customer_type else default_customer_type
+
     filtered_df = df[
         (df["Gender"] == st.session_state.gender) &
-        (df["Type of Travel"].isin(st.session_state.travel_type)) &
-        (df["Class"].isin(st.session_state.class_type)) &
-        (df["Customer Type"].isin(st.session_state.customer_type))
+        (df["Type of Travel"].isin(travel_type_filter)) &
+        (df["Class"].isin(class_type_filter)) &
+        (df["Customer Type"].isin(customer_type_filter))
         ]
 
     # --- Göstergeler ---
@@ -128,14 +193,53 @@ try:
 
     # --- Tahmin Girişi ---
     st.subheader("🔮 Yolcu Memnuniyeti Tahmini")
+
+    # Kategorik değişkenler
     input_data = {
         'Gender': gender,
-        'Customer Type': customer_type[0],
-        'Type of Travel': travel_type[0],
-        'Class': class_type[0]
+        'Customer Type': customer_type[0] if customer_type else default_customer_type[0],
+        'Type of Travel': travel_type[0] if travel_type else default_travel_type[0],
+        'Class': class_type[0] if class_type else default_class_type[0]
     }
 
-    numerical_cols = [
+    # Önemli sayısal değişkenler - Sayıyı azalttık
+    key_numerical_cols = [
+        'Age',
+        'Flight Distance',
+        'Food and drink',
+        'Seat comfort',
+        'Online boarding',
+        'Inflight wifi service',
+        'Cleanliness',
+        'Departure Delay in Minutes'
+    ]
+
+    # Filtrelere göre sayısal değerlerin ortalamalarını hesapla
+    filtered_means = {}
+    for feature in key_numerical_cols:
+        filtered_means[feature] = int(filtered_df[feature].mean())
+
+    # Önemli sayısal verileri al
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # İlk sütundaki slider'lar
+        for i, feature in enumerate(key_numerical_cols[:4]):
+            min_val = int(df[feature].min())
+            max_val = int(df[feature].max())
+            mean_val = filtered_means.get(feature, int(df[feature].mean()))
+            input_data[feature] = st.slider(feature, min_val, max_val, mean_val)
+
+    with col2:
+        # İkinci sütundaki slider'lar
+        for i, feature in enumerate(key_numerical_cols[4:]):
+            min_val = int(df[feature].min())
+            max_val = int(df[feature].max())
+            mean_val = filtered_means.get(feature, int(df[feature].mean()))
+            input_data[feature] = st.slider(feature, min_val, max_val, mean_val)
+
+    # Eksik olan sayısal değişkenleri tamamla (model için gerekli)
+    all_numerical_cols = [
         'Age', 'Flight Distance', 'Departure/Arrival time convenient', 'Ease of Online booking',
         'Gate location', 'Food and drink', 'Online boarding', 'Seat comfort',
         'Inflight entertainment', 'On-board service', 'Leg room service', 'Baggage handling',
@@ -143,12 +247,10 @@ try:
         'Cleanliness', 'Departure Delay in Minutes', 'Arrival Delay in Minutes'
     ]
 
-    # Sayısal verileri al
-    for feature in numerical_cols:
-        min_val = int(df[feature].min())
-        max_val = int(df[feature].max())
-        mean_val = int(df[feature].mean())
-        input_data[feature] = st.slider(feature, min_val, max_val, mean_val)
+    # Kullanıcı tarafından seçilmeyen değişkenler için ortalama değerleri kullan
+    for feature in all_numerical_cols:
+        if feature not in input_data:
+            input_data[feature] = filtered_df[feature].mean()
 
     # --- Label Encoding ---
     label_encoders = {}
@@ -168,131 +270,156 @@ try:
     model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
 
-    # Kullanıcı girişini encode et
-    encoded_input = {}
-    for col in categorical_cols:
-        encoded_input[col] = label_encoders[col].transform([input_data[col]])[0]
-    for col in numerical_cols:
-        encoded_input[col] = input_data[col]
+    # Tahmin butonu
+    if st.button("🧠 Tahmini Hesapla"):
+        # Kullanıcı girişini encode et
+        encoded_input = {}
+        for col in categorical_cols:
+            if input_data[col]:  # Boş olmadığından emin ol
+                encoded_input[col] = label_encoders[col].transform([input_data[col]])[0]
+            else:
+                encoded_input[col] = 0  # Varsayılan değer
 
-    # Özellikleri doğru sırayla listele
-    feature_order = X.columns.tolist()  # Eğitimde kullanılan özelliklerin sırası
-    input_list = [encoded_input[col] for col in feature_order]
+        for col in all_numerical_cols:
+            encoded_input[col] = input_data[col]
 
-    # DataFrame'e çevir
-    input_df = pd.DataFrame([input_list], columns=feature_order)
+        # Özellikleri doğru sırayla listele
+        feature_order = X.columns.tolist()  # Eğitimde kullanılan özelliklerin sırası
+        input_list = [encoded_input[col] for col in feature_order]
 
-    # Model tahmini
-    prediction = model.predict(input_df)[0]
+        # DataFrame'e çevir
+        input_df = pd.DataFrame([input_list], columns=feature_order)
 
-    acc = accuracy_score(y_test, model.predict(X_test))
-    class_rep = classification_report(y_test, model.predict(X_test))
+        # Model tahmini
+        prediction = model.predict(input_df)[0]
 
-    prediction_label = "🔵 Memnun" if prediction == 1 else "🔴Memnun Değil"
+        # Tahmin yapıldı olarak işaretle
+        st.session_state.prediction_made = True
+        st.session_state.prediction = prediction
+        st.session_state.input_data = input_data.copy()
 
-    st.markdown(f"### 🔍 Tahmin Sonucu: **{prediction_label}**")
+        # Sayfayı yenile
+        st.rerun()
 
-    # Dinamik Stratejik Yorumlar
-    if prediction == 1:
-        st.subheader("Stratejik Yorumlar")
-        st.markdown(""" 
-        Yapılan veri analizi sonucunda, yolcuların büyük bir çoğunluğunun havayolu firmasıyla olan genel deneyiminden yüksek düzeyde memnuniyet duyduğu tespit edilmiştir. Bu memnuniyet, markaya olan güvenin ve hizmet kalitesinin doğrudan bir yansımasıdır. Ancak havacılık sektöründeki yoğun rekabet ve değişen müşteri beklentileri göz önüne alındığında, yalnızca mevcut başarıyı korumak değil, hizmet kalitesini sürekli geliştirerek beklentilerin ötesine geçmek de stratejik bir gerekliliktir.
+    # Tahmin sonucunu göster
+    if st.session_state.prediction_made:
+        prediction = st.session_state.prediction
+        input_data = st.session_state.input_data
 
-        ### 🌟 Kritik Başarı Alanları ve Gelişim Önerileri:
+        acc = accuracy_score(y_test, model.predict(X_test))
+        class_rep = classification_report(y_test, model.predict(X_test))
 
-        - **🍽️ Yemek ve İçecek Hizmetleri:**  
-          Mevcut menülerin farklı kültürel ve kişisel tercihlere hitap edecek şekilde çeşitlendirilmesi, vegan, vejetaryen ve alerjen duyarlılığına uygun opsiyonların artırılması önerilmektedir.  
-          Ayrıca menü sunumunun görsel ve işitsel deneyimle desteklenmesi (örneğin mobil menüler, sesli açıklamalar) yolcu deneyimini zenginleştirebilir.
+        prediction_label = "🔵 Memnun" if prediction == 1 else "🔴 Memnun Değil"
 
-        - **💺 Koltuk Konforu ve Fiziksel Alan:**  
-          Ergonomik tasarıma sahip, kişisel alanı artıran koltuklar ve modüler oturma çözümleri özellikle uzun mesafeli uçuşlarda müşteri sadakatini etkileyen başlıca faktörlerdendir.  
-          Ayarlanabilir başlık, ayak dayama desteği, kişisel USB/şarj noktaları gibi özellikler konfor seviyesini artırabilir.
+        st.markdown(f"### 🔍 Tahmin Sonucu: **{prediction_label}**")
 
-        - **🎬 Uçuş İçi Eğlence Sistemleri:**  
-          Kişiselleştirilebilir arayüzler, farklı yaş gruplarına özel içerikler, çoklu dil desteği ve online içerik güncellemeleri sayesinde sistem daha çekici hale getirilebilir.  
-          Ayrıca yolcunun tercih geçmişine göre önerilen içerikler, müşteri bağlılığını artıracak yapay zeka destekli çözümlerle desteklenebilir.
+        # Dinamik Stratejik Yorumlar
+        if prediction == 1:
+            st.subheader("Stratejik Yorumlar")
+            st.markdown(""" 
+            Yapılan veri analizi sonucunda, yolcuların büyük bir çoğunluğunun havayolu firmasıyla olan genel deneyiminden yüksek düzeyde memnuniyet duyduğu tespit edilmiştir. Bu memnuniyet, markaya olan güvenin ve hizmet kalitesinin doğrudan bir yansımasıdır. Ancak havacılık sektöründeki yoğun rekabet ve değişen müşteri beklentileri göz önüne alındığında, yalnızca mevcut başarıyı korumak değil, hizmet kalitesini sürekli geliştirerek beklentilerin ötesine geçmek de stratejik bir gerekliliktir.
 
-        - **🚀 Yenilikçi Hizmet Yaklaşımları:**  
-          - **Mobil Uygulama İyileştirmeleri:** Uçuş içi anketler, anlık geri bildirim alma sistemleri, kişisel hizmet tercihleri yönetimi gibi özellikler eklenmelidir.  
-          - **Yapay Zeka Entegrasyonu:** Kişisel öneriler, check-in kolaylığı ve dijital asistan destekli rehberlik gibi uygulamalar yolcu deneyimini bireyselleştirecektir.  
-          - **Sanal Gerçeklik ve Artırılmış Gerçeklik Uygulamaları:** Özellikle business ve premium segmentte fark yaratan deneyimler sunabilir.
+            ### 🌟 Kritik Başarı Alanları ve Gelişim Önerileri:
 
-        ### 📈 Stratejik Sonuç ve Yol Haritası:
+            - **🍽️ Yemek ve İçecek Hizmetleri:**  
+              Mevcut menülerin farklı kültürel ve kişisel tercihlere hitap edecek şekilde çeşitlendirilmesi, vegan, vejetaryen ve alerjen duyarlılığına uygun opsiyonların artırılması önerilmektedir.  
+              Ayrıca menü sunumunun görsel ve işitsel deneyimle desteklenmesi (örneğin mobil menüler, sesli açıklamalar) yolcu deneyimini zenginleştirebilir.
 
-        Yüksek memnuniyet seviyesi bir avantaj olmakla birlikte sürdürülebilirliği ancak sistematik bir iyileştirme döngüsü ile sağlanabilir.  
-        Bu kapsamda:
+            - **💺 Koltuk Konforu ve Fiziksel Alan:**  
+              Ergonomik tasarıma sahip, kişisel alanı artıran koltuklar ve modüler oturma çözümleri özellikle uzun mesafeli uçuşlarda müşteri sadakatini etkileyen başlıca faktörlerdendir.  
+              Ayarlanabilir başlık, ayak dayama desteği, kişisel USB/şarj noktaları gibi özellikler konfor seviyesini artırabilir.
 
-        - Müşteri geri bildirimlerinin sürekli ve bütüncül olarak analiz edilmesi,  
-        - Veriye dayalı karar alma kültürünün yerleştirilmesi,  
-        - Hizmet kalitesinin teknolojik gelişmelerle eşgüdümlü olarak güncellenmesi gereklidir.
+            - **🎬 Uçuş İçi Eğlence Sistemleri:**  
+              Kişiselleştirilebilir arayüzler, farklı yaş gruplarına özel içerikler, çoklu dil desteği ve online içerik güncellemeleri sayesinde sistem daha çekici hale getirilebilir.  
+              Ayrıca yolcunun tercih geçmişine göre önerilen içerikler, müşteri bağlılığını artıracak yapay zeka destekli çözümlerle desteklenebilir.
 
-        **Sonuç olarak**, yüksek müşteri memnuniyeti sadece bir anlık başarı göstergesi değil, stratejik bir sürdürülebilirlik unsuru olarak ele alınmalıdır.
-        """)
+            - **🚀 Yenilikçi Hizmet Yaklaşımları:**  
+              - **Mobil Uygulama İyileştirmeleri:** Uçuş içi anketler, anlık geri bildirim alma sistemleri, kişisel hizmet tercihleri yönetimi gibi özellikler eklenmelidir.  
+              - **Yapay Zeka Entegrasyonu:** Kişisel öneriler, check-in kolaylığı ve dijital asistan destekli rehberlik gibi uygulamalar yolcu deneyimini bireyselleştirecektir.  
+              - **Sanal Gerçeklik ve Artırılmış Gerçeklik Uygulamaları:** Özellikle business ve premium segmentte fark yaratan deneyimler sunabilir.
 
-    else:
-        st.subheader(" Stratejik Yorumlar")
-        st.markdown(""" 
-        Yapılan analizler, bazı yolcuların havayolu firmasının sunduğu hizmetlerden yeterince memnun kalmadığını göstermektedir.  
-        Bu durum, müşteri deneyiminde iyileştirme gerektiren kritik noktaların varlığını açıkça ortaya koymaktadır.  
+            ### 📈 Stratejik Sonuç ve Yol Haritası:
 
-        ### 📉 Belirlenen Başlıca Sorun Alanları
+            Yüksek memnuniyet seviyesi bir avantaj olmakla birlikte sürdürülebilirliği ancak sistematik bir iyileştirme döngüsü ile sağlanabilir.  
+            Bu kapsamda:
 
-        🔁 **Biniş İşlemleri (Check-in ve Boarding):**  
-        ⏳ Uzun bekleme süreleri, ❌ yetersiz yönlendirmeler ve 💻 dijital altyapı eksiklikleri yolcu stresini artırmakta ve memnuniyeti azaltmaktadır.  
-        ✅ Daha hızlı ve kullanıcı dostu dijital çözümler acil ihtiyaçlar arasındadır.
+            - Müşteri geri bildirimlerinin sürekli ve bütüncül olarak analiz edilmesi,  
+            - Veriye dayalı karar alma kültürünün yerleştirilmesi,  
+            - Hizmet kalitesinin teknolojik gelişmelerle eşgüdümlü olarak güncellenmesi gereklidir.
 
-        👨‍✈️ **Hizmet Kalitesi:**  
-        ✈️ Uçuş öncesi, sırası ve sonrasında sunulan hizmetlerin tutarsız olması, müşteri beklentilerinin karşılanmamasına yol açmaktadır.  
-        Özellikle kabin ekibinin 🤝 tutumu, yardımseverliği ve profesyonelliği yolcu deneyiminde belirleyici rol oynamaktadır.
+            **Sonuç olarak**, yüksek müşteri memnuniyeti sadece bir anlık başarı göstergesi değil, stratejik bir sürdürülebilirlik unsuru olarak ele alınmalıdır.
+            """)
 
-        📞 **İletişim ve Geri Bildirim Mekanizmaları:**  
-        🙁 Yolcuların yaşadıkları sorunları kolayca iletebileceği ve çözüm alabileceği etkili sistemlerin eksikliği göze çarpmaktadır.
-
-        ---
-
-        ### ✅ Stratejik İyileştirme Önerileri
-
-        🎓 **Personel Eğitimi:**  
-        Kabin ve yer hizmetleri personeline yönelik düzenli eğitimler verilmelidir.  
-        👂 Empati, 🧘 stres yönetimi ve 📢 etkili iletişim becerileri odağında geliştirici programlar uygulanmalıdır.
-
-        ⚙️ **Operasyonel Geliştirmeler:**  
-        📲 Mobil uygulamalar, 🖥️ self-servis kiosklardan biniş, anlık bilgilendirme sistemleri gibi yeniliklerle süreçler dijitalleştirilmelidir.
-
-        📊 **Geri Bildirim Analitiği:**  
-        💡 Yolculardan alınan şikayet, öneri ve değerlendirmeler 🤖 yapay zeka destekli analizlerle işlenmeli ve karar süreçlerine entegre edilmelidir.
-
-        ---
-
-        🚨 **Sonuç:**  
-        Düşük memnuniyet düzeyleri, hem müşteri sadakati hem de marka algısı üzerinde olumsuz etkiler yaratmaktadır.  
-        Bu nedenle sorun alanları hızla tespit edilmeli, 🔧 iyileştirici adımlar atılmalı ve tüm gelişmeler 🎯 düzenli olarak izlenmelidir.
-                """)
-
-    if 'history' not in st.session_state:
-        st.session_state['history'] = []
-
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    st.session_state['history'].append({
-        "Zaman": timestamp,
-        "Tahmin": "Memnun" if prediction == 1 else "Memnun Değil",
-        "Girdi": input_data
-    })
-    with st.expander("🕓 Tahmin Geçmişi"):
-        if st.session_state['history']:
-            history_df = pd.DataFrame(st.session_state['history'])
-            st.dataframe(history_df)
         else:
-            st.info("Henüz bir tahmin yapılmadı.")
+            st.subheader("Stratejik Yorumlar")
+            st.markdown(""" 
+            Yapılan analizler, bazı yolcuların havayolu firmasının sunduğu hizmetlerden yeterince memnun kalmadığını göstermektedir.  
+            Bu durum, müşteri deneyiminde iyileştirme gerektiren kritik noktaların varlığını açıkça ortaya koymaktadır.  
 
-    # PDF çıktısı oluştur
-    if st.button("📄 PDF Raporu Oluştur ve İndir"):
-        pdf_buffer = create_pdf(prediction_label, acc, input_data, class_rep)
-        st.download_button(label="📥 Raporu İndir", data=pdf_buffer,
-                           file_name=f"yolcu_memnuniyet_raporu_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                           mime="application/pdf")
+            ### 📉 Belirlenen Başlıca Sorun Alanları
+
+            🔁 **Biniş İşlemleri (Check-in ve Boarding):**  
+            ⏳ Uzun bekleme süreleri, ❌ yetersiz yönlendirmeler ve 💻 dijital altyapı eksiklikleri yolcu stresini artırmakta ve memnuniyeti azaltmaktadır.  
+            ✅ Daha hızlı ve kullanıcı dostu dijital çözümler acil ihtiyaçlar arasındadır.
+
+            👨‍✈️ **Hizmet Kalitesi:**  
+            ✈️ Uçuş öncesi, sırası ve sonrasında sunulan hizmetlerin tutarsız olması, müşteri beklentilerinin karşılanmamasına yol açmaktadır.  
+            Özellikle kabin ekibinin 🤝 tutumu, yardımseverliği ve profesyonelliği yolcu deneyiminde belirleyici rol oynamaktadır.
+
+            📞 **İletişim ve Geri Bildirim Mekanizmaları:**  
+            🙁 Yolcuların yaşadıkları sorunları kolayca iletebileceği ve çözüm alabileceği etkili sistemlerin eksikliği göze çarpmaktadır.
+
+            ---
+
+            ### ✅ Stratejik İyileştirme Önerileri
+
+            🎓 **Personel Eğitimi:**  
+            Kabin ve yer hizmetleri personeline yönelik düzenli eğitimler verilmelidir.  
+            👂 Empati, 🧘 stres yönetimi ve 📢 etkili iletişim becerileri odağında geliştirici programlar uygulanmalıdır.
+
+            ⚙️ **Operasyonel Geliştirmeler:**  
+            📲 Mobil uygulamalar, 🖥️ self-servis kiosklardan biniş, anlık bilgilendirme sistemleri gibi yeniliklerle süreçler dijitalleştirilmelidir.
+
+            📊 **Geri Bildirim Analitiği:**  
+            💡 Yolculardan alınan şikayet, öneri ve değerlendirmeler 🤖 yapay zeka destekli analizlerle işlenmeli ve karar süreçlerine entegre edilmelidir.
+
+            ---
+
+            🚨 **Sonuç:**  
+            Düşük memnuniyet düzeyleri, hem müşteri sadakati hem de marka algısı üzerinde olumsuz etkiler yaratmaktadır.  
+            Bu nedenle sorun alanları hızla tespit edilmeli, 🔧 iyileştirici adımlar atılmalı ve tüm gelişmeler 🎯 düzenli olarak izlenmelidir.
+                    """)
+
+        if 'history' not in st.session_state:
+            st.session_state['history'] = []
+
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        history_entry = {
+            "Zaman": timestamp,
+            "Tahmin": "Memnun" if prediction == 1 else "Memnun Değil",
+            "Girdi": input_data
+        }
+
+        # Eğer bu tahmin daha önce eklenmemişse ekle
+        if not any(entry["Zaman"] == timestamp for entry in st.session_state['history']):
+            st.session_state['history'].append(history_entry)
+
+        with st.expander("🕓 Tahmin Geçmişi"):
+            if st.session_state['history']:
+                history_df = pd.DataFrame(st.session_state['history'])
+                st.dataframe(history_df)
+            else:
+                st.info("Henüz bir tahmin yapılmadı.")
+
+        # PDF çıktısı oluştur
+        if st.button("📄 PDF Raporu Oluştur ve İndir"):
+            pdf_buffer = create_pdf(prediction_label, acc, input_data, class_rep)
+            st.download_button(label="📥 Raporu İndir", data=pdf_buffer,
+                               file_name=f"yolcu_memnuniyet_raporu_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                               mime="application/pdf")
+    else:
+        # Tahmin yapılmadığında göster
+        st.info("⏳ Henüz tahmin yapılmadı. Yukarıdaki parametreleri ayarlayıp 'Tahmini Hesapla' butonuna tıklayınız.")
 
 except Exception as e:
-        st.error(f"Veri yükleme veya modelleme sırasında bir hata oluştu: {str(e)}")
-
-
+    st.error(f"Veri yükleme veya modelleme sırasında bir hata oluştu: {str(e)}")
