@@ -335,14 +335,12 @@ try:
 
     # Önemli sayısal değişkenler - Sayıyı azalttık
     key_numerical_cols = [
-        'Age',
-        'Flight Distance',
-        'Food and drink',
-        'Seat comfort',
-        'Online boarding',
-        'Inflight wifi service',
-        'Cleanliness',
-        'Departure Delay in Minutes'
+        'Age', 'Flight Distance', 'Departure/Arrival time convenient', 'Ease of Online booking',
+        'Gate location', 'Food and drink', 'Online boarding', 'Seat comfort',
+        'Inflight entertainment', 'On-board service', 'Leg room service', 'Baggage handling',
+        'Checkin service', 'Inflight service', 'Inflight wifi service',
+        'Cleanliness', 'Departure Delay in Minutes', 'Arrival Delay in Minutes',
+
     ]
 
     # Filtrelere göre sayısal değerlerin ortalamalarını hesapla
@@ -351,11 +349,11 @@ try:
         filtered_means[feature] = int(filtered_df[feature].mean())
 
     # Önemli sayısal verileri al
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         # İlk sütundaki slider'lar
-        for i, feature in enumerate(key_numerical_cols[:4]):
+        for i, feature in enumerate(key_numerical_cols[:6]):
             min_val = int(df[feature].min())
             max_val = int(df[feature].max())
             mean_val = filtered_means.get(feature, int(df[feature].mean()))
@@ -363,7 +361,15 @@ try:
 
     with col2:
         # İkinci sütundaki slider'lar
-        for i, feature in enumerate(key_numerical_cols[4:]):
+        for i, feature in enumerate(key_numerical_cols[6:12]):
+            min_val = int(df[feature].min())
+            max_val = int(df[feature].max())
+            mean_val = filtered_means.get(feature, int(df[feature].mean()))
+            input_data[feature] = st.slider(feature, min_val, max_val, mean_val)
+
+    with col3:
+        # İkinci sütundaki slider'lar
+        for i, feature in enumerate(key_numerical_cols[12:]):
             min_val = int(df[feature].min())
             max_val = int(df[feature].max())
             mean_val = filtered_means.get(feature, int(df[feature].mean()))
