@@ -99,20 +99,9 @@ try:
     with st.sidebar:
         st.header("🔍 Filtreleme Seçenekleri")
 
-        # Filtreleri temizle butonu - sidebar'ın en üstüne taşındı
-        if st.button("🧹 Filtreleri Temizle"):
-            # Session state değişkenlerini varsayılan değerlere sıfırla
-            st.session_state.gender = default_gender
-            # Tüm checkbox'ları seçili hale getir
-            st.session_state.travel_type_selected = {option: True for option in default_travel_type}
-            st.session_state.class_type_selected = {option: True for option in default_class_type}
-            st.session_state.customer_type_selected = {option: True for option in default_customer_type}
-            # Tahmin durumunu sıfırla
-            st.session_state.prediction_made = False
-            st.session_state.reset_filters = True  # Filtre sıfırlama işlemini işaretle
-            st.rerun()  # Sayfayı yenile
-
-        # Filtreleme seçeneklerini session_state ile başlat
+        # Session state başlatma - bu kısım en üstte olmalı
+        if "filter_reset_counter" not in st.session_state:
+            st.session_state.filter_reset_counter = 0
         if "gender" not in st.session_state:
             st.session_state.gender = default_gender
         if "travel_type_selected" not in st.session_state:
@@ -123,64 +112,90 @@ try:
             st.session_state.customer_type_selected = {option: True for option in default_customer_type}
         if "prediction_made" not in st.session_state:
             st.session_state.prediction_made = False
-        if "reset_filters" not in st.session_state:
-            st.session_state.reset_filters = False
 
-        # Cinsiyet seçimi (selectbox olarak kalıyor)
-        gender = st.selectbox("Cinsiyet Seçiniz", df["Gender"].unique(),
-                              index=df["Gender"].unique().tolist().index(st.session_state.gender))
+        # Filtreleri temizle butonu
+        if st.button("🧹 Filtreleri Temizle", key=f"clear_filters_{st.session_state.filter_reset_counter}"):
+            # Counter'ı artır - bu widget'ların key'lerini değiştirecek
+            st.session_state.filter_reset_counter += 1
+
+            # Session state değişkenlerini varsayılan değerlere sıfırla
+            st.session_state.gender = default_gender
+            st.session_state.travel_type_selected = {option: True for option in default_travel_type}
+            st.session_state.class_type_selected = {option: True for option in default_class_type}
+            st.session_state.customer_type_selected = {option: True for option in default_customer_type}
+            st.session_state.prediction_made = False
+
+            st.rerun()
+
+        # Reset counter'ı kullanarak unique key'ler oluştur
+        reset_key = st.session_state.filter_reset_counter
+
+        # Cinsiyet seçimi
+        gender = st.selectbox(
+            "Cinsiyet Seçiniz",
+            df["Gender"].unique(),
+            index=df["Gender"].unique().tolist().index(st.session_state.gender),
+            key=f"gender_select_{reset_key}"
+        )
 
         # Yolculuk Türü için checkbox'lar
         st.subheader("Yolculuk Türü")
         travel_type = []
-        for option in default_travel_type:
-            # st.session_state değeri kullanarak checkbox'ları kontrol et
-            selected = st.checkbox(option, value=st.session_state.travel_type_selected.get(option, True),
-                                   key=f"travel_{option}")
+        for i, option in enumerate(default_travel_type):
+            selected = st.checkbox(
+                option,
+                value=st.session_state.travel_type_selected.get(option, True),
+                key=f"travel_{option}_{reset_key}_{i}"
+            )
             if selected:
                 travel_type.append(option)
-            # Checkbox durumunu güncelle
             st.session_state.travel_type_selected[option] = selected
 
         # Sınıf için checkbox'lar
         st.subheader("Sınıf")
         class_type = []
-        for option in default_class_type:
-            # st.session_state değeri kullanarak checkbox'ları kontrol et
-            selected = st.checkbox(option, value=st.session_state.class_type_selected.get(option, True),
-                                   key=f"class_{option}")
+        for i, option in enumerate(default_class_type):
+            selected = st.checkbox(
+                option,
+                value=st.session_state.class_type_selected.get(option, True),
+                key=f"class_{option}_{reset_key}_{i}"
+            )
             if selected:
                 class_type.append(option)
-            # Checkbox durumunu güncelle
             st.session_state.class_type_selected[option] = selected
 
         # Müşteri Türü için checkbox'lar
         st.subheader("Müşteri Türü")
         customer_type = []
-        for option in default_customer_type:
-            # st.session_state değeri kullanarak checkbox'ları kontrol et
-            selected = st.checkbox(option, value=st.session_state.customer_type_selected.get(option, True),
-                                   key=f"customer_{option}")
+        for i, option in enumerate(default_customer_type):
+            selected = st.checkbox(
+                option,
+                value=st.session_state.customer_type_selected.get(option, True),
+                key=f"customer_{option}_{reset_key}_{i}"
+            )
             if selected:
                 customer_type.append(option)
-            # Checkbox durumunu güncelle
             st.session_state.customer_type_selected[option] = selected
-
-        # Filtre sıfırlama işlemi tamamlandıysa bayrağı sıfırla
-        if st.session_state.reset_filters:
-            st.session_state.reset_filters = False
 
         # Session_state değerlerini güncelle
         st.session_state.gender = gender
-        st.session_state.travel_type = travel_type if travel_type else default_travel_type
-        st.session_state.class_type = class_type if class_type else default_class_type
-        st.session_state.customer_type = customer_type if customer_type else default_customer_type
 
-    # Filtreleri uygula - En az bir filtre seçili olmalı
-    # Boş liste ise varsayılan tüm değerleri kullan
-    travel_type_filter = st.session_state.travel_type if st.session_state.travel_type else default_travel_type
-    class_type_filter = st.session_state.class_type if st.session_state.class_type else default_class_type
-    customer_type_filter = st.session_state.customer_type if st.session_state.customer_type else default_customer_type
+        # Boş liste kontrolü ve varsayılan değer atama
+        if not travel_type:
+            travel_type = default_travel_type
+        if not class_type:
+            class_type = default_class_type
+        if not customer_type:
+            customer_type = default_customer_type
+
+        st.session_state.travel_type = travel_type
+        st.session_state.class_type = class_type
+        st.session_state.customer_type = customer_type
+
+    # Filtreleri uygula
+    travel_type_filter = getattr(st.session_state, 'travel_type', default_travel_type)
+    class_type_filter = getattr(st.session_state, 'class_type', default_class_type)
+    customer_type_filter = getattr(st.session_state, 'customer_type', default_customer_type)
 
     filtered_df = df[
         (df["Gender"] == st.session_state.gender) &
@@ -188,6 +203,7 @@ try:
         (df["Class"].isin(class_type_filter)) &
         (df["Customer Type"].isin(customer_type_filter))
         ]
+
 
     # --- Göstergeler ---
     st.subheader("📈 Temel Göstergeler")
